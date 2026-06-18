@@ -1,0 +1,4 @@
+interface:
+  display_name: "Asterinas Debugger"
+  short_description: "Composable Asterinas GDB debugging workflows"
+  default_prompt: "Use $asterinas-debugger to debug Asterinas with reusable GDB primitive skills."

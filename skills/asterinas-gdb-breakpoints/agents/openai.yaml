@@ -1,0 +1,4 @@
+interface:
+  display_name: "Asterinas GDB Breakpoints"
+  short_description: "Apply breakpoints, watchpoints, and trace checks"
+  default_prompt: "Use $asterinas-gdb-breakpoints to choose Asterinas GDB breakpoints, watchpoints, and evidence checks."

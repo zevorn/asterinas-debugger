@@ -1,0 +1,4 @@
+interface:
+  display_name: "Asterinas GDB Inspect"
+  short_description: "Inspect Asterinas kernel objects and helper output"
+  default_prompt: "Use $asterinas-gdb-inspect to inspect Asterinas process, thread, fd, lock, atomic, and kernel helper state."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Asterinas GDB Session"
+  short_description: "Start and attach reusable Asterinas GDB sessions"
+  default_prompt: "Use $asterinas-gdb-session to prepare Docker, QEMU, rust-gdb, tmux, and helper loading for Asterinas debugging."

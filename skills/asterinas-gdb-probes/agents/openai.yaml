@@ -1,0 +1,4 @@
+interface:
+  display_name: "Asterinas GDB Probes"
+  short_description: "Write repeatable GDB Python probes for Asterinas"
+  default_prompt: "Use $asterinas-gdb-probes to create repeatable GDB Python probes for Asterinas debugging."
