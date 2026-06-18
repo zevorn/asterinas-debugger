@@ -116,24 +116,53 @@ Do not commit those generated debugging artifacts to the Asterinas source tree.
 
 ## Example Workflow
 
-A typical process-loading investigation looks like this:
+A process-loading investigation can start with a concrete command plan:
 
-1. Start or reuse the Asterinas development container.
-2. Boot the kernel with a QEMU GDB stub.
-3. Attach `rust-gdb` and source `scripts/gdb/asterinas-gdb.py`.
-4. Run a baseline snapshot:
+```bash
+# From the Asterinas repository.
+python3 /path/to/asterinas-debugger/skills/asterinas-debugger/scripts/asterinas_debugger.py \
+    doctor --repo .
 
-```gdb
-ast-version
-info pretty-printer
-ast-ps
-ast-threads
-ast-fds 1
-p *$ast_process(1)
+python3 /path/to/asterinas-debugger/skills/asterinas-debugger/scripts/asterinas_debugger.py \
+    plan process-loading --repo .
+
+mkdir -p build/agent/asterinas-debugger
+
+python3 /path/to/asterinas-debugger/skills/asterinas-debugger/scripts/asterinas_debugger.py \
+    gdbinit process-loading --repo . --remote .osdk-gdb-socket \
+    > build/agent/asterinas-debugger/process_loading.gdb
 ```
 
-5. Add the smallest breakpoint or probe for the active hypothesis.
-6. Record the command, output summary, and next hypothesis.
+Then boot Asterinas with a GDB stub and run the generated GDB script against
+the kernel ELF:
+
+```bash
+cargo osdk run --gdb-server wait-client
+rust-gdb --command=build/agent/asterinas-debugger/process_loading.gdb \
+    target/x86_64-unknown-none/debug/aster-kernel-osdk-bin
+```
+
+The generated script is only a starting point. Review the proposed breakpoint
+symbols against the current source tree before relying on them.
+
+When using the installed skills through Codex, give the agent the repository,
+scenario, and observable symptom. For example:
+
+```text
+Use the asterinas-debugger skill in this Asterinas checkout.
+Investigate why PID 1 fails during exec. Reuse the running Docker container,
+load scripts/gdb/asterinas-gdb.py, take a baseline snapshot with ast-ps,
+ast-threads, and ast-fds 1, then propose the smallest breakpoint plan.
+```
+
+Another example for lifecycle tracing:
+
+```text
+Use the asterinas-debugger skill to trace a process from creation to exit.
+Write temporary GDB scripts only under build/agent/asterinas-debugger/.
+Use the Asterinas GDB helpers whenever possible and summarize each stop with
+the command, the evidence, and the next hypothesis.
+```
 
 ## Validation
 
