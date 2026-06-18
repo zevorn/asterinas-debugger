@@ -51,6 +51,25 @@ build/agent/asterinas-debugger/
 These files are agent scratch artifacts. They should not be added to Asterinas
 source directories or included in the Asterinas PR.
 
+## Container Evidence
+
+When a debugging session uses Docker, record which container was selected and
+why:
+
+```text
+Container:
+Image:
+State before use:
+Mounted checkout:
+Rust targets present:
+Kernel ELF:
+Initramfs:
+```
+
+Use direct file checks for this preflight. Avoid `rustc`, `cargo`, or
+`cargo osdk` until the selected container is confirmed, because those commands
+may trigger rustup target installation in a fresh container.
+
 ## Escalation Rule
 
 Move one level lower only when the current level cannot answer the question:

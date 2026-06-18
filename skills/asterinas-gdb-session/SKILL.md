@@ -15,28 +15,63 @@ loaded and the exact setup commands recorded.
 
 ## Procedure
 
-1. Check for a reusable running container before creating a new one.
-2. If Docker is not reachable, start the Docker service first, then re-check
+1. Check for reusable Asterinas containers before creating a new one. Include
+   both running and stopped containers.
+2. Prefer a running container with the target checkout mounted. If none is
+   running, start a stopped warm container for the same checkout before trying
+   a fresh container.
+3. If Docker is not reachable, start the Docker service first, then re-check
    the existing containers.
-3. Build or locate the target kernel ELF through Asterinas tooling. Prefer
+4. Inspect the selected container without triggering rustup. Check toolchain
+   target directories directly under `/root/.rustup/toolchains/.../lib/rustlib`
+   instead of running `rustc`, `cargo`, or `cargo osdk`.
+5. Build or locate the target kernel ELF through Asterinas tooling. Prefer
    `cargo osdk debug --remote <endpoint>` when the workspace supports helper
    auto-loading.
-4. If auto-loading is not available, launch `rust-gdb` manually, attach with
+6. If auto-loading is not available, launch `rust-gdb` manually, attach with
    `target remote <endpoint>`, then source `scripts/gdb/asterinas-gdb.py`.
-5. Confirm the helper banner or run `ast-version` before setting workflow
+7. Confirm the helper banner or run `ast-version` before setting workflow
    breakpoints.
-6. Keep QEMU, GDB, and log output in separate tmux panes when the investigation
+8. Keep QEMU, GDB, and log output in separate tmux panes when the investigation
    needs repeated boot or stop cycles.
-7. Store agent-generated logs, `.gdb` scripts, and Python probes under
+9. Store agent-generated logs, `.gdb` scripts, and Python probes under
    `build/agent/asterinas-debugger/` in the Asterinas repository.
+10. After interrupted QEMU or smoke runs, check for `defunct` QEMU processes.
+    If zombies are parented by container PID 1, restart the test container
+    instead of trying to `kill` the zombie process.
 
 ## Command Shapes
 
 ```bash
-docker ps --format '{{.Names}}\t{{.Image}}\t{{.Status}}'
+docker ps -a --format '{{.Names}}\t{{.Image}}\t{{.Status}}'
 cargo osdk debug --remote :1234
 python3 skills/asterinas-debugger/scripts/asterinas_debugger.py doctor --repo .
 ```
+
+No-rustup preflight inside a candidate container:
+
+```bash
+find /root/.rustup/toolchains -maxdepth 4 -type d \
+    \( -name x86_64-unknown-none \
+    -o -name riscv64imac-unknown-none-elf \
+    -o -name loongarch64-unknown-none-softfloat \) -print
+test -f /root/asterinas/target/x86_64-unknown-none/debug/aster-kernel-osdk-bin
+test -f /root/asterinas/test/initramfs/build/initramfs.cpio.gz
+```
+
+If the selected container lacks required Rust targets, report that it is a
+fresh or incomplete container. Do not run `rustup target add` unless the user
+explicitly asks to warm that container.
+
+Interrupted QEMU cleanup:
+
+```bash
+ps -eo pid,ppid,stat,cmd | grep -E 'defunct|qemu|rust-gdb|cargo osdk'
+docker restart <warm-container>
+```
+
+Use container restart only for zombie cleanup or when no live debugging session
+needs to be preserved.
 
 Manual fallback inside GDB:
 

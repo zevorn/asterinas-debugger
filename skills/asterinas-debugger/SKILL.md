@@ -33,7 +33,8 @@ control.
 
 1. Classify the symptom into one scenario in `references/workflows.md`.
 2. Use `$asterinas-gdb-session` to confirm the target ELF, remote endpoint, and
-   helper loading path.
+   helper loading path. Reuse an already warmed Asterinas container whenever
+   one exists.
 3. Use `$asterinas-gdb-inspect` to take a baseline snapshot before changing
    execution state.
 4. Use `$asterinas-gdb-breakpoints` to place the smallest useful stop or
@@ -69,6 +70,21 @@ This includes temporary `.gdb` files, GDB Python probes, QEMU logs, trace
 outputs, and scratch notes created for one debugging session. Do not write these
 files into Asterinas source directories such as `scripts/`, `kernel/`, `ostd/`,
 or `test/`.
+
+## Container Rule
+
+Do not create a fresh Asterinas Docker container until reusable containers have
+been checked. Prefer, in order:
+
+1. a running Asterinas container with the target checkout mounted;
+2. a stopped Asterinas container that was previously used for this checkout and
+   can be started again;
+3. a new container, only when no reusable container exists.
+
+For preflight checks, inspect files and directories directly. Avoid commands
+that can trigger rustup updates, such as `rustc`, `cargo`, or `cargo osdk`,
+until the intended container has been selected and its toolchain targets have
+been checked.
 
 Prefer helper commands first. Fall back to raw GDB expressions or GDB Python
 when helper output is missing, too broad, or not close enough to the object
