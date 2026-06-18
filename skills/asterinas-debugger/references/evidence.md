@@ -39,6 +39,18 @@ p *$ast_process(1)
 p *$ast_file_table(1)
 ```
 
+## Artifact Location
+
+Store session logs, generated `.gdb` files, generated GDB Python probes, and
+trace output in:
+
+```text
+build/agent/asterinas-debugger/
+```
+
+These files are agent scratch artifacts. They should not be added to Asterinas
+source directories or included in the Asterinas PR.
+
 ## Escalation Rule
 
 Move one level lower only when the current level cannot answer the question:

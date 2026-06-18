@@ -14,6 +14,7 @@ HELPER_REL = Path("scripts/gdb/asterinas-gdb.py")
 HELPER_DIR_REL = Path("scripts/gdb/helper")
 SMOKE_REL = Path("scripts/gdb/test/smoke.py")
 SMOKE_RUNNER_REL = Path("scripts/gdb/test/run_smoke.sh")
+DEFAULT_AGENT_DIR = Path("build/agent/asterinas-debugger")
 
 
 WORKFLOWS = {
@@ -236,6 +237,229 @@ def print_gdbinit(name: str, repo: Path | None, remote: str | None) -> int:
     return 0
 
 
+def lifecycle_python() -> str:
+    return r'''"""Trace an Asterinas process lifecycle through GDB helpers."""
+
+import gdb
+
+
+EVENTS = []
+MAX_COMMAND_LINES = 10
+TARGET_PID = None
+
+
+def _run(command):
+    try:
+        output = gdb.execute(command, to_string=True)
+    except gdb.error as error:
+        gdb.write(f"TRACE-CMD {command}: ERROR: {error}\n")
+        return
+
+    gdb.write(f"TRACE-CMD {command}:\n")
+    for line in output.rstrip().splitlines()[:MAX_COMMAND_LINES]:
+        gdb.write(f"TRACE-OUT {line}\n")
+
+
+def _field_int(value, field):
+    try:
+        return int(value[field])
+    except (gdb.error, TypeError, ValueError):
+        return None
+
+
+def _context_pid_tid():
+    try:
+        ctx = gdb.parse_and_eval("ctx")
+        pid = _field_int(ctx["process"], "pid")
+        tid = _field_int(ctx["posix_thread"], "tid")
+        return pid, tid
+    except gdb.error:
+        return None, None
+
+
+def _exit_process_pid():
+    try:
+        process = gdb.parse_and_eval("current_process")
+        return _field_int(process, "pid")
+    except gdb.error:
+        return None
+
+
+def _snapshot(label):
+    pid, tid = _context_pid_tid()
+    if pid is None and label == "exit_process":
+        pid = _exit_process_pid()
+
+    EVENTS.append((label, pid, tid))
+    event_no = len(EVENTS)
+    gdb.write(f"\nTRACE-EVENT {event_no}: {label}")
+    if pid is not None:
+        gdb.write(f" pid={pid}")
+    if tid is not None:
+        gdb.write(f" tid={tid}")
+    gdb.write("\n")
+
+    _run("bt 6")
+    _run("ast-ps")
+    _run("ast-threads")
+
+    sample_pid = pid if pid is not None else TARGET_PID
+    if sample_pid is not None:
+        _run(f"ast-ps {sample_pid}")
+        _run(f"ast-fds {sample_pid}")
+
+    if TARGET_PID is not None and TARGET_PID != sample_pid:
+        _run(f"ast-ps {TARGET_PID}")
+        _run(f"ast-fds {TARGET_PID}")
+
+    _run("p (*$ast_thread(1)).is_exited")
+    _run("p/r (*$ast_thread(1)).is_exited")
+
+
+class LifecycleBreakpoint(gdb.Breakpoint):
+    def __init__(self, spec, label, final=False):
+        super().__init__(spec)
+        self.silent = True
+        self.label = label
+        self.final = final
+
+    def stop(self):
+        _snapshot(self.label)
+        if not self.final:
+            return False
+        if TARGET_PID is None:
+            return True
+
+        pid = _exit_process_pid()
+        return pid == TARGET_PID
+
+
+def _try_break(spec, label, final=False):
+    try:
+        LifecycleBreakpoint(spec, label, final)
+        gdb.write(f"TRACE-INSTALL {label}: {spec}\n")
+    except gdb.error as error:
+        gdb.write(f"TRACE-INSTALL {label}: ERROR: {error}\n")
+
+
+def install(target_pid=None):
+    global TARGET_PID
+    TARGET_PID = target_pid
+
+    _run("ast-version")
+    _try_break(
+        "aster_kernel::process::process::init_proc::spawn_init_process",
+        "spawn_init_process",
+    )
+    _try_break("aster_kernel::process::clone::clone_child", "clone_child")
+    _try_break("aster_kernel::syscall::execve::sys_execve", "sys_execve")
+    _try_break("aster_kernel::process::execve::do_execve", "do_execve")
+    _try_break("aster_kernel::syscall::exit::sys_exit", "sys_exit")
+    _try_break(
+        "aster_kernel::syscall::exit_group::sys_exit_group",
+        "sys_exit_group",
+    )
+    _try_break("aster_kernel::process::posix_thread::exit::do_exit", "do_exit")
+    _try_break(
+        "aster_kernel::process::posix_thread::exit::do_exit_group",
+        "do_exit_group",
+    )
+    _try_break(
+        "aster_kernel::process::exit::exit_process",
+        "exit_process",
+        final=True,
+    )
+
+
+def finalize():
+    gdb.write("\nTRACE-SUMMARY:\n")
+    for index, (label, pid, tid) in enumerate(EVENTS, start=1):
+        gdb.write(f"TRACE-SUMMARY {index}: {label}")
+        if pid is not None:
+            gdb.write(f" pid={pid}")
+        if tid is not None:
+            gdb.write(f" tid={tid}")
+        gdb.write("\n")
+
+    if not EVENTS:
+        raise gdb.GdbError("no lifecycle events were observed")
+    if not any(label == "exit_process" for label, _, _ in EVENTS):
+        raise gdb.GdbError("process exit was not observed")
+
+    gdb.write("TRACE: lifecycle ok\n")
+'''
+
+
+def _gdb_path(path: Path, repo: Path) -> str:
+    try:
+        return str(path.relative_to(repo))
+    except ValueError:
+        return str(path)
+
+
+def lifecycle_gdb(repo: Path, output_dir: Path, remote: str, pid: int | None) -> str:
+    helper_path = _gdb_path(repo / HELPER_REL, repo)
+    python_dir = _gdb_path(output_dir, repo)
+    pid_arg = "None" if pid is None else str(pid)
+    return f"""# Generated by asterinas-debugger. Do not commit this file.
+set pagination off
+set confirm off
+
+target remote {remote}
+source {helper_path}
+
+hbreak __ostd_main
+continue
+delete
+
+python
+import sys
+sys.path.insert(0, {python_dir!r})
+import process_lifecycle
+process_lifecycle.install(target_pid={pid_arg})
+end
+
+continue
+
+python
+process_lifecycle.finalize()
+end
+
+quit
+"""
+
+
+def write_lifecycle_files(
+    repo: Path | None,
+    output_dir_arg: str | None,
+    remote: str,
+    pid: int | None,
+) -> int:
+    if repo is None:
+        print("error: Asterinas repo not found", file=sys.stderr)
+        print("pass --repo <path> or set ASTERINAS_REPO", file=sys.stderr)
+        return 1
+
+    if output_dir_arg:
+        output_dir = Path(output_dir_arg).expanduser()
+        if not output_dir.is_absolute():
+            output_dir = repo / output_dir
+    else:
+        output_dir = repo / DEFAULT_AGENT_DIR
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    python_path = output_dir / "process_lifecycle.py"
+    gdb_path = output_dir / "process_lifecycle.gdb"
+    python_path.write_text(lifecycle_python())
+    gdb_path.write_text(lifecycle_gdb(repo, output_dir, remote, pid))
+
+    print(f"wrote {gdb_path}")
+    print(f"wrote {python_path}")
+    print(f"run: rust-gdb --batch --command={gdb_path} <kernel-elf>")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Generate Asterinas GDB helper workflow plans.",
@@ -258,6 +482,25 @@ def build_parser() -> argparse.ArgumentParser:
     )
     gdbinit_parser.add_argument("workflow", choices=sorted(WORKFLOWS))
     gdbinit_parser.add_argument("--remote", help="GDB remote endpoint")
+
+    lifecycle_parser = subparsers.add_parser(
+        "lifecycle-gdb",
+        help="write process lifecycle GDB scripts under build/agent",
+    )
+    lifecycle_parser.add_argument(
+        "--output-dir",
+        help="output directory; defaults to build/agent/asterinas-debugger",
+    )
+    lifecycle_parser.add_argument(
+        "--pid",
+        type=int,
+        help="stop only when this PID exits; default stops on first process exit",
+    )
+    lifecycle_parser.add_argument(
+        "--remote",
+        default=".osdk-gdb-socket",
+        help="GDB remote endpoint; default is .osdk-gdb-socket",
+    )
 
     return parser
 
@@ -303,6 +546,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "gdbinit":
         return print_gdbinit(args.workflow, repo, args.remote)
+    if args.command == "lifecycle-gdb":
+        return write_lifecycle_files(repo, args.output_dir, args.remote, args.pid)
 
     parser.error(f"unsupported command: {args.command}")
 

@@ -27,6 +27,8 @@ loaded and the exact setup commands recorded.
    breakpoints.
 6. Keep QEMU, GDB, and log output in separate tmux panes when the investigation
    needs repeated boot or stop cycles.
+7. Store agent-generated logs, `.gdb` scripts, and Python probes under
+   `build/agent/asterinas-debugger/` in the Asterinas repository.
 
 ## Command Shapes
 
@@ -48,6 +50,19 @@ info pretty-printer
 When the command is launched outside the Asterinas tree, pass `--repo` to the
 workflow script or export `ASTERINAS_REPO` so helper paths resolve to the
 current PR checkout instead of an unrelated directory.
+
+## Temporary Artifacts
+
+Use `build/agent/asterinas-debugger/` for session-specific files:
+
+```text
+build/agent/asterinas-debugger/qemu.log
+build/agent/asterinas-debugger/process_lifecycle.gdb
+build/agent/asterinas-debugger/process_lifecycle.py
+```
+
+These files are not part of the Asterinas source tree. Do not add them under
+`scripts/gdb/`, `kernel/`, `ostd/`, or `test/`.
 
 ## Architecture Notes
 

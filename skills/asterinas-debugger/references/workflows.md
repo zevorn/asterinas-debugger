@@ -7,6 +7,9 @@ Each workflow composes the primitive skills in this order:
 3. `$asterinas-gdb-breakpoints`
 4. `$asterinas-gdb-probes`, only if repeated sampling is needed
 
+Generated workflow artifacts should live under
+`build/agent/asterinas-debugger/` in the Asterinas repository.
+
 ## Boot
 
 Use for early traps, missing helper attachment, failed kernel entry, or hangs

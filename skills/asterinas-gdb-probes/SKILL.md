@@ -23,6 +23,9 @@ grep-friendly evidence.
 4. Prefer `gdb.execute(..., to_string=True)` for command output and
    `gdb.parse_and_eval()` for values.
 5. Keep generated output short enough to compare across runs.
+6. For repository-local scripts, write generated `.gdb`, `.py`, and log files
+   under `build/agent/asterinas-debugger/`, not under Asterinas source
+   directories.
 
 ## Helper Script
 
@@ -33,3 +36,9 @@ python3 skills/asterinas-gdb-probes/scripts/make_probe.py pid-snapshot --pid 1
 ```
 
 Paste the generated block at the GDB prompt or redirect it into a `.gdb` file.
+
+For longer probes tied to one Asterinas checkout, generate or place them under:
+
+```text
+build/agent/asterinas-debugger/
+```

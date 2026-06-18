@@ -57,6 +57,19 @@ the utility script with `--repo <path>` or set `ASTERINAS_REPO=<path>`. The
 script searches upward from the current directory before using the environment
 variable.
 
+## Agent Output Directory
+
+Put agent-generated debugging artifacts under:
+
+```text
+build/agent/asterinas-debugger/
+```
+
+This includes temporary `.gdb` files, GDB Python probes, QEMU logs, trace
+outputs, and scratch notes created for one debugging session. Do not write these
+files into Asterinas source directories such as `scripts/`, `kernel/`, `ostd/`,
+or `test/`.
+
 Prefer helper commands first. Fall back to raw GDB expressions or GDB Python
 when helper output is missing, too broad, or not close enough to the object
 under investigation.
@@ -80,7 +93,14 @@ python3 skills/asterinas-debugger/scripts/asterinas_debugger.py plan \
 python3 skills/asterinas-debugger/scripts/asterinas_debugger.py gdbinit process-loading \
     --repo . \
     --remote :1234
+python3 skills/asterinas-debugger/scripts/asterinas_debugger.py lifecycle-gdb \
+    --repo . \
+    --remote .osdk-gdb-socket
 ```
 
 Generated `.gdb` files are starting points. Review the symbol names against the
 current build before relying on them.
+
+Lifecycle trace files are written under `build/agent/asterinas-debugger/` by
+default. They are temporary debugging artifacts and should not be committed to
+the Asterinas source tree.

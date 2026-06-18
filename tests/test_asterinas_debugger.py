@@ -89,6 +89,40 @@ class AsterinasDebuggerTest(unittest.TestCase):
         self.assertIn("ast-fds 1", result.stdout)
         self.assertIn("p *$ast_process(1)", result.stdout)
 
+    def test_lifecycle_gdb_writes_under_build_agent_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo = make_fake_asterinas_repo(Path(tmpdir))
+            result = run_command(
+                "python3",
+                str(WORKFLOW),
+                "--repo",
+                str(repo),
+                "lifecycle-gdb",
+                "--remote",
+                ".osdk-gdb-socket",
+            )
+
+            gdb_path = (
+                repo
+                / "build/agent/asterinas-debugger/process_lifecycle.gdb"
+            )
+            python_path = (
+                repo
+                / "build/agent/asterinas-debugger/process_lifecycle.py"
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("build/agent/asterinas-debugger", result.stdout)
+            self.assertTrue(gdb_path.exists())
+            self.assertTrue(python_path.exists())
+            gdb_text = gdb_path.read_text()
+            self.assertIn("source scripts/gdb/asterinas-gdb.py", gdb_text)
+            self.assertIn(
+                "sys.path.insert(0, 'build/agent/asterinas-debugger')",
+                gdb_text,
+            )
+            self.assertIn("TRACE-EVENT", python_path.read_text())
+
     def test_probe_has_gdb_python_block_without_indent_prefix(self) -> None:
         result = run_command(
             "python3",
