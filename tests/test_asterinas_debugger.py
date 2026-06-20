@@ -89,6 +89,19 @@ class AsterinasDebuggerTest(unittest.TestCase):
         self.assertIn("ast-fds 1", result.stdout)
         self.assertIn("p *$ast_process(1)", result.stdout)
 
+    def test_plan_includes_goal_loop_record(self) -> None:
+        result = run_command(
+            "python3",
+            str(WORKFLOW),
+            "plan",
+            "process-loading",
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Goal loop record:", result.stdout)
+        self.assertIn("Verdict: supported | rejected", result.stdout)
+        self.assertIn("Next step:", result.stdout)
+
     def test_lifecycle_gdb_writes_under_build_agent_dir(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             repo = make_fake_asterinas_repo(Path(tmpdir))

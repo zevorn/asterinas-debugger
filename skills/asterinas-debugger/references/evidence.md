@@ -1,23 +1,36 @@
 # Evidence Rules
 
-Use one evidence block per hypothesis. Keep it short enough to paste into an
-issue, PR comment, or debugging note.
+Use one evidence block per loop iteration. Keep it short enough to paste into
+an issue, PR comment, Goal update, or debugging note.
+
+The loop shape is:
+
+```text
+Goal -> baseline -> hypothesis -> stop/probe -> evidence -> verdict -> next step
+```
 
 ## Block Format
 
 ```text
+Goal:
+Iteration:
 Hypothesis:
 Stop or command:
 Observed:
 Raw fallback:
-Conclusion:
+Verdict:
 Next step:
 ```
 
 `Stop or command` must include the exact GDB command, helper command, or Python
 probe that produced the observation. `Raw fallback` is optional, but should be
 filled when pretty-printer output, helper output, or object navigation is under
-review.
+review. `Verdict` should be one of: `supported`, `rejected`, `inconclusive`,
+or `complete`.
+
+Use `complete` only when the evidence answers the active Goal. Use
+`inconclusive` when the next iteration needs a narrower hypothesis, a different
+stop, or a probe.
 
 ## Minimum Baseline
 
@@ -83,3 +96,19 @@ Move one level lower only when the current level cannot answer the question:
 Record the failed or incomplete higher-level command before using the lower
 level. That keeps helper gaps visible instead of hiding them inside raw GDB
 work.
+
+## Goal Updates
+
+When the investigation is running under Codex Goal or Oh-My-Pi Goal, include a
+short loop update after every stop:
+
+```text
+Goal state:
+Latest evidence:
+Verdict:
+Next iteration:
+```
+
+Keep the Goal thread focused on the current hypothesis and evidence. Do not
+store raw logs in the Goal; put full logs and probes under
+`build/agent/asterinas-debugger/` and reference the filename.

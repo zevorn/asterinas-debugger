@@ -10,6 +10,29 @@ Each workflow composes the primitive skills in this order:
 Generated workflow artifacts should live under
 `build/agent/asterinas-debugger/` in the Asterinas repository.
 
+## Goal-Aware Loop
+
+The primitive order is the body of one loop iteration. The workflow should
+repeat that body until the active Goal is answered:
+
+```text
+baseline -> hypothesis -> stop/probe -> evidence -> verdict -> next step
+```
+
+Use the Goal thread as the outer loop state when available. Each iteration
+should update the current hypothesis, the evidence that was actually observed,
+the verdict, and the next action. A workflow may switch scenarios between
+iterations, but only after the evidence points to a different subsystem.
+
+Use these verdicts:
+
+- `supported`: the evidence supports the current hypothesis; narrow the next
+  stop or probe.
+- `rejected`: the evidence contradicts the current hypothesis; form a new one.
+- `inconclusive`: the evidence is insufficient; collect a smaller or more
+  stable observation.
+- `complete`: the original Goal has been answered.
+
 ## Boot
 
 Use for early traps, missing helper attachment, failed kernel entry, or hangs

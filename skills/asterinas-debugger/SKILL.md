@@ -1,6 +1,6 @@
 ---
 name: asterinas-debugger
-description: Use this workflow skill when debugging Asterinas kernel issues with rust-gdb, QEMU, Docker, and the Asterinas GDB helpers. It classifies boot, process loading, scheduling, filesystem, driver, network or peripheral, and framekernel problems, then composes the asterinas-gdb-session, asterinas-gdb-breakpoints, asterinas-gdb-inspect, and asterinas-gdb-probes primitive skills into an evidence-driven flow.
+description: Use this workflow skill when debugging Asterinas kernel issues with rust-gdb, QEMU, Docker, and the Asterinas GDB helpers. It classifies boot, process loading, scheduling, filesystem, driver, network or peripheral, and framekernel problems, then composes the primitive skills into a Goal-aware evidence loop.
 ---
 
 # Asterinas Debugger
@@ -8,7 +8,7 @@ description: Use this workflow skill when debugging Asterinas kernel issues with
 ## Overview
 
 This is the workflow skill for Asterinas debugging. It selects a scenario,
-loads the relevant primitive skills, and drives GDB work in short evidence
+loads the relevant primitive skills, and drives GDB work in Goal-aware evidence
 loops.
 
 ## Included Primitive Skills
@@ -31,18 +31,36 @@ control.
 
 ## Workflow
 
-1. Classify the symptom into one scenario in `references/workflows.md`.
-2. Use `$asterinas-gdb-session` to confirm the target ELF, remote endpoint, and
+1. If the user has a Codex or Oh-My-Pi Goal active, bind the investigation to
+   that Goal and keep the current iteration state visible in the response.
+2. Classify the symptom into one scenario in `references/workflows.md`.
+3. Use `$asterinas-gdb-session` to confirm the target ELF, remote endpoint, and
    helper loading path. Reuse an already warmed Asterinas container whenever
    one exists.
-3. Use `$asterinas-gdb-inspect` to take a baseline snapshot before changing
+4. Use `$asterinas-gdb-inspect` to take a baseline snapshot before changing
    execution state.
-4. Use `$asterinas-gdb-breakpoints` to place the smallest useful stop or
-   watchpoint for the current hypothesis.
-5. Use `$asterinas-gdb-probes` only after the same inspection needs to be run
+5. State one concrete hypothesis and use `$asterinas-gdb-breakpoints` to place
+   the smallest useful stop or watchpoint for it.
+6. Use `$asterinas-gdb-probes` only after the same inspection needs to be run
    more than once or across several stops.
-6. After each stop, record the exact command, output summary, and next
+7. After each stop, record the exact command, output summary, verdict, and next
    hypothesis using `references/evidence.md`.
+
+## Loop Engine
+
+Treat every debugging pass as one loop iteration:
+
+```text
+Goal -> baseline -> hypothesis -> stop/probe -> evidence -> verdict -> next step
+```
+
+Use this loop even when the user does not explicitly mention RLCR. For simple
+runs, Codex Goal or Oh-My-Pi Goal can act as the outer loop state: keep the
+long-running objective, current hypothesis, collected evidence, and next action
+in the Goal thread. Mark the investigation complete only when the evidence
+answers the original Goal. If a verdict is inconclusive, update the hypothesis
+and start the next iteration instead of broadening the breakpoint set
+immediately.
 
 ## Asterinas Repository Binding
 
@@ -94,8 +112,8 @@ under investigation.
 
 - `references/workflows.md`: boot, process loading, scheduling, filesystem,
   driver, network or peripheral, and framekernel workflows.
-- `references/evidence.md`: evidence format, stop summaries, and escalation
-  rules.
+- `references/evidence.md`: loop format, stop summaries, verdicts, and
+  escalation rules.
 
 ## Utility Script
 

@@ -16,6 +16,17 @@ SMOKE_REL = Path("scripts/gdb/test/smoke.py")
 SMOKE_RUNNER_REL = Path("scripts/gdb/test/run_smoke.sh")
 DEFAULT_AGENT_DIR = Path("build/agent/asterinas-debugger")
 
+LOOP_TEMPLATE = [
+    "Goal:",
+    "Iteration:",
+    "Hypothesis:",
+    "Stop or command:",
+    "Observed:",
+    "Raw fallback:",
+    "Verdict: supported | rejected | inconclusive | complete",
+    "Next step:",
+]
+
 
 WORKFLOWS = {
     "boot": {
@@ -206,6 +217,10 @@ def print_plan(name: str, repo: Path | None) -> None:
     print("Evidence checks:")
     for command in workflow["checks"]:
         print(f"- {command}")
+    print()
+    print("Goal loop record:")
+    for line in LOOP_TEMPLATE:
+        print(f"- {line}")
 
 
 def print_gdbinit(name: str, repo: Path | None, remote: str | None) -> int:
