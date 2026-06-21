@@ -4,15 +4,21 @@
 
 当时我们看的，主要是 Rust 工具链相关的动态依赖。比如 Rust 标准库、核心库这一类库，在构建环境和 OS rootfs 里的版本关系。问题出在版本上：编译阶段链接到的版本，和 OS 内部实际加载到的版本对不上。符号名看起来能匹配，真实地址背后的函数已经偏掉。遇到重名符号时，这个问题会更隐蔽。你以为自己找到了正确的函数，内核实际走到的位置却已经偏离。
 
+![进程加载阶段的问题链路](assets/asterinas-gdb-helper-wechat/process-loading-trap-chain.png)
+
 后面表现出来的是一次 trap：加载 interpreter 和后续依赖库的过程中，内核触发 trap，用户进程收到 Segmentation Fault。表面上看，这是一个用户态程序断错误，继续往里追，就会穿过动态链接、进程加载、trap handler、内核对象和 Rust 类型系统。
 
 调试路径没有太多花样。我们先用 QEMU 跑星绽 OS，打开 gdbstub，再用 GDB 客户端远程连上去。等进程加载时触发异常以后，从异常现场往前回溯，先找到进程断错误以后陷入内核态的 trap handler，再看 trap handler 里的栈帧和调用栈，最后反推真正引发异常的位置。
+
+![QEMU 和 GDB 的排查路径](assets/asterinas-gdb-helper-wechat/qemu-gdb-trace-path.png)
 
 这条路理论上可以走通。
 
 真正拖慢我们的，是 Rust 编译以后在 GDB 里的表现。Rust 的命名会把 crate 名、模块路径、类型名、impl 或 trait 上下文、函数名和泛型参数一层层拼起来，泛型单态化以后，具体类型也会继续出现在符号里。反汇编和调用栈里看到的符号名非常长。很多时候你明明知道要看调用链，眼睛还是会被大量重复、冗长、相似的名字拖住。
 
 在 C 或 C++ 程序里做反向分析已经需要耐心。换到 Rust 内核里，噪声会更密集，类型输出也是一个问题。内核里有很多 wrapper 类型，比如 `AtomicBool`、`Mutex<T>`、`RwMutex<T>`、`SpinLock<T>`。GDB 默认会把内部实现也展开出来。如果你只是想看一个布尔值，它会展开成 `AtomicBool -> UnsafeCell<u8> -> value`；如果你只是想看一个锁里的业务对象，它会先把锁本身的内部布局、队列和 `UnsafeCell` 展示出来，然后把真正想看的值藏在很深的位置。
+
+![Rust 在 GDB 里的噪声对比](assets/asterinas-gdb-helper-wechat/rust-gdb-noise-before-after.png)
 
 这会持续打断人的思路（可以说是很难受了，多看几眼就昏头的那种）。
 
