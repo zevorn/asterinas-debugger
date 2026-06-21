@@ -1,6 +1,6 @@
 # 从一次断错误开始理解星绽 OS 的 GDB Helper
 
-星绽 OS 的 GDB helper，是我们最近围绕内核调试体验做的一次工程整理，起点来自一次实际调试。当时我们在和星绽社区的开发者一起排查一个进程加载阶段的问题。星绽在加载这类用户程序时，会先处理 ELF 里的 `PT_INTERP`，把动态链接器映射进进程地址空间。后续依赖库的解析和装载，会继续由用户态动态链接器推进。
+星绽 OS 的 GDB helper，是我们最近围绕内核调试体验沉淀出来的一层调试辅助能力，起点来自一次实际调试。当时我们在和星绽社区的开发者一起排查一个进程加载阶段的问题。星绽在加载这类用户程序时，会先处理 ELF 里的 `PT_INTERP`，把动态链接器映射进进程地址空间。后续依赖库的解析和装载，会继续由用户态动态链接器推进。
 
 当时我们看的，主要是 Rust 工具链相关的动态依赖。比如 Rust 标准库、核心库这一类库，在构建环境和 OS rootfs 里的版本关系。问题出在版本上：编译阶段链接到的版本，和 OS 内部实际加载到的版本对不上。符号名看起来能匹配，真实地址背后的函数已经偏掉。遇到重名符号时，这个问题会更隐蔽。你以为自己找到了正确的函数，内核实际走到的位置却已经偏离。
 
@@ -103,6 +103,8 @@ scripts/gdb/asterinas-gdb.py
         +-- helper/constants.py     layout-sensitive symbols, names, sizes, markers
 ```
 
+![Asterinas GDB Helper 加载结构](assets/asterinas-gdb-helper-wechat/gdb-helper-structure.png)
+
 这个拆分来自 RFC 里的维护性讨论：GDB helper 一定会和内核结构发生耦合。这层耦合最好集中放在少数地方，并且在代码里显式露出来。PR 里把符号名、类型名、线程名长度、timer 频率、文件 vtable marker 这类 layout-sensitive 常量集中放到 `constants.py`。
 
 同时，在 Rust 源码相关位置补了 `COUPLED` 注释，比如 PID table、线程名、文件表、timer jiffies 等结构发生变化时，开发者可以看到对应的 GDB helper 也需要检查。
@@ -171,6 +173,12 @@ one debugging iteration
              +-- inconclusive   update Goal state and start next iteration
 ```
 
+![Asterinas Debugger Skill Workflow](assets/asterinas-gdb-helper-wechat/agent-workflow-loop.png)
+
+如果把这个过程放成一个终端动图，大概就是下面这种形态。Goal 命令先确定长程目标，`asterinas-debugger` 负责选调试场景，再把 session、inspect、breakpoints、probes 这些 primitive skill 按一轮轮调试循环串起来。
+
+![使用 Asterinas Debugger Skill 调试星绽](assets/asterinas-gdb-helper-wechat/asterinas-debugger-skill-demo.gif)
+
 如果 helper command 够用，就停在 helper command；需要进一步看字段，就用 convenience function；还不够，再落到 raw GDB expression。重复采样时，再升级成 GDB Python probe。这样调试过程会比较稳。每往下一层，都知道为什么要往下走。
 
 ## 回到最初那个问题
@@ -179,19 +187,9 @@ one debugging iteration
 
 如果当时已经有这套 GDB helper，第一步就可以先拿到更清晰的进程、线程、文件描述符和内核对象状态。如果再配合 Agent workflow 和 Goal-driven loop，调试过程可以继续被压缩：Agent 先建立 baseline，然后围绕进程加载、动态库映射、文件打开、trap 现场逐步放断点。遇到需要重复采集的状态，就生成 probe；每次 stop 之后，Goal 里继续保存当前假设、证据、判断和下一轮动作。
 
-这样人可以把注意力放在真正的异常链路上：动态库到底加载了哪个版本，符号解析在哪一步发生偏移，trap 前最后一次用户态到内核态的边界在哪里，哪些对象状态和预期不一致。这些问题才是关键。
+这样作为开发者，就可以把注意力放在真正的异常链路上：动态库到底加载了哪个版本，符号解析在哪一步发生偏移，trap 前最后一次用户态到内核态的边界在哪里，哪些对象状态和预期不一致。这些问题我觉得才是关键。
 
-工具先把噪声降下来。
 
-## 最后
-
-星绽 OS 的 GDB helper，先把调试入口打通，让 GDB 能理解更多星绽内核对象：通过 pretty-printer 降低 Rust wrapper 噪声，通过 convenience function 解决对象导航，通过少量 `ast-*` 命令覆盖最常见的聚合视图。
-
-Asterinas Debugger Skills 继续往上一层走，把 GDB helper 放进 Agent workflow 里，让 session、inspect、breakpoints、probes 这些动作变成可组合的 Flow Primitive，再围绕 boot、process loading、scheduling、filesystem、driver 这些场景组织调试过程。更长程的问题，则交给 Goal 或类似 RLCR-loop 的 loop engine，把多轮调试串起来。
-
-我们想提供的东西，大概就是这几层：上游有 GDB helper，本地有配套 Agent skill，再往上，有 Goal-aware loop 把每轮假设、证据和下一步连起来。开发者可以直接在 GDB 里观察内核状态，也可以把更长的调试任务交给 Codex 或 Oh-My-Pi 的 Goal 命令去推进。
-
-这套东西最开始来自一次很痛苦的断错误，后来它变成了一个更通用的调试入口。内核工具很多时候就是这样长出来的：先有一个足够痛的问题，然后把痛点里重复出现的动作抽出来，再把这些动作变成工具、测试和 Workflow，最后它就会进入日常开发流程。
 
 撰文：泽文(Zevorn)
 
