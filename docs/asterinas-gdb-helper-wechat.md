@@ -84,6 +84,25 @@ PR 里把 helper 放在 `scripts/gdb/` 下面，入口是 `scripts/gdb/asterinas
 
 `printers.py` 负责注册 wrapper-type pretty-printer。`kernel.py` 是最贴近星绽内核结构的一层，知道 PID table 怎么走，`Task`、`Thread`、`PosixThread` 怎么关联，文件表怎么拿，jiffies 怎么读。`commands.py` 面向用户，只做参数解析和输出格式化。真正的内核结构知识，尽量留在 `kernel.py` 和 `layout.py`。
 
+放成结构图看，大概是这样：
+
+```text
+cargo osdk debug
+    |
+    v
+scripts/gdb/asterinas-gdb.py
+    |-- add scripts/gdb to Python path
+    |-- register rust-gdb std printers
+    +-- load Asterinas helper modules
+        |
+        +-- helper/gdb_bridge.py    GDB API wrapper, command/function registration
+        +-- helper/layout.py        Rust layout readers: Arc/Weak/Option/Vec/BTreeMap/Atomic/locks
+        +-- helper/printers.py      wrapper-type pretty-printers
+        +-- helper/kernel.py        Asterinas object navigation: PID table, task/thread, file table, jiffies
+        +-- helper/commands.py      ast-* commands, argument parsing, table output
+        +-- helper/constants.py     layout-sensitive symbols, names, sizes, markers
+```
+
 这个拆分来自 RFC 里的维护性讨论：GDB helper 一定会和内核结构发生耦合。这层耦合最好集中放在少数地方，并且在代码里显式露出来。PR 里把符号名、类型名、线程名长度、timer 频率、文件 vtable marker 这类 layout-sensitive 常量集中放到 `constants.py`。
 
 同时，在 Rust 源码相关位置补了 `COUPLED` 注释，比如 PID table、线程名、文件表、timer jiffies 等结构发生变化时，开发者可以看到对应的 GDB helper 也需要检查。
